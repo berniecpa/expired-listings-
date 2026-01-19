@@ -121,13 +121,17 @@ async function processExpiredListings(env) {
     }
     
     // 8. Send Slack summary with top 10
-    await sendSlackSummary(
-      env.SLACK_WEBHOOK, 
-      allProcessedListings.sort((a, b) => b.urgencyScore - a.urgencyScore).slice(0, 10),
-      totalListings
-    );
-    
-    console.log(`Processing complete. ${totalListings} listings analyzed.`);
+    console.log(`Sending Slack summary for ${totalListings} listings...`);
+    try {
+      await sendSlackSummary(
+        env.SLACK_WEBHOOK,
+        allProcessedListings.sort((a, b) => b.urgencyScore - a.urgencyScore).slice(0, 10),
+        totalListings
+      );
+      console.log(`Processing complete. ${totalListings} listings analyzed.`);
+    } catch (slackError) {
+      console.error("Slack send failed:", slackError.message || slackError);
+    }
   } catch (error) {
     console.error("Error in processExpiredListings:", error);
     throw error;
@@ -345,34 +349,39 @@ async function skipTraceWithTracerfy(listings, apiKey) {
     const queueId = submitResult.queue_id || submitResult.id;
     console.log(`Tracerfy batch submitted, queue ID: ${queueId}`);
     
-    // Poll for completion (max 5 minutes)
+    // Poll for completion (max 2 minutes to avoid Cloudflare timeout)
     let attempts = 0;
-    const maxAttempts = 30;
+    const maxAttempts = 12;
     let downloadUrl = null;
-    
+
     while (attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
-      
-      const statusResponse = await fetch(`https://tracerfy.com/v1/api/queue/${queueId}`, {
+
+      const statusResponse = await fetch(`https://tracerfy.com/v1/api/queue/${queueId}/`, {
         headers: {
           "Authorization": `Bearer ${apiKey}`
         }
       });
-      
+
       if (!statusResponse.ok) {
         console.error("Tracerfy status check failed:", statusResponse.status);
         attempts++;
         continue;
       }
-      
+
       const statusResult = await statusResponse.json();
-      console.log(`Tracerfy status: pending=${statusResult.pending}`);
-      
-      if (statusResult.pending === false && statusResult.download_url) {
-        downloadUrl = statusResult.download_url;
+      console.log(`Tracerfy status response:`, JSON.stringify(statusResult));
+
+      // Handle various possible status field formats from Tracerfy API
+      const status = statusResult.status || statusResult.state;
+      const isComplete = status === "completed" || status === "complete" || status === "done" || statusResult.pending === false;
+      const resultUrl = statusResult.download_url || statusResult.result_url || statusResult.file_url || statusResult.url;
+
+      if (isComplete && resultUrl) {
+        downloadUrl = resultUrl;
         break;
       }
-      
+
       attempts++;
     }
     
