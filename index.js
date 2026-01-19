@@ -346,22 +346,30 @@ async function skipTraceWithTracerfy(listings, apiKey) {
     }
     
     const submitResult = await submitResponse.json();
+    console.log(`Tracerfy submit response:`, JSON.stringify(submitResult));
     const queueId = submitResult.queue_id || submitResult.id;
     console.log(`Tracerfy batch submitted, queue ID: ${queueId}`);
-    
-    // Poll for completion (max 2 minutes to avoid Cloudflare timeout)
+
+    // Poll for completion (max 90 seconds to leave time for Claude + Slack)
     let attempts = 0;
-    const maxAttempts = 12;
+    const maxAttempts = 9;
     let downloadUrl = null;
 
     while (attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
 
-      const statusResponse = await fetch(`https://tracerfy.com/v1/api/queue/${queueId}/`, {
+      // Try the trace endpoint (same as submit, with ID)
+      const statusResponse = await fetch(`https://tracerfy.com/v1/api/trace/${queueId}/`, {
         headers: {
           "Authorization": `Bearer ${apiKey}`
         }
       });
+
+      if (statusResponse.status === 404) {
+        // 404 means wrong endpoint - don't retry, break immediately
+        console.error("Tracerfy status endpoint not found (404). Check API docs for correct URL.");
+        break;
+      }
 
       if (!statusResponse.ok) {
         console.error("Tracerfy status check failed:", statusResponse.status);
@@ -576,6 +584,11 @@ async function storeIntelligence(db, listing) {
 // ============================================
 
 async function sendSlackSummary(webhookUrl, topListings, totalCount) {
+  if (!webhookUrl) {
+    console.error("SLACK_WEBHOOK not configured - skipping notification");
+    return;
+  }
+
   const blocks = [
     {
       type: "header",
