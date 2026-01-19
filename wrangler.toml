@@ -1,0 +1,28 @@
+name = "ai-chief-of-staff-expired-listings"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+# Cron trigger - every 6 hours
+[triggers]
+crons = ["0 */6 * * *"]
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "ai-chief-of-staff"
+database_id = "4eb616da-8938-4c19-8700-eb0ffd60b505"
+
+# R2 Bucket binding
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "ai-chief-of-staff"
+
+# Observability (logging)
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# Secrets (set via `wrangler secret put`):
+# - ANTHROPIC_API_KEY
+# - SLACK_WEBHOOK
+# - TRACERFY_API_KEY (optional - for skip tracing)
