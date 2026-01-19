@@ -315,7 +315,7 @@ async function skipTraceWithTracerfy(listings, apiKey) {
     
     // Create form data with CSV file and ALL required column mappings
     const formData = new FormData();
-    formData.append("file", new Blob([csvContent], { type: "text/csv" }), "listings.csv");
+    formData.append("csv_file", new Blob([csvContent], { type: "text/csv" }), "listings.csv");
     formData.append("address_column", "address");
     formData.append("city_column", "city");
     formData.append("state_column", "state");
